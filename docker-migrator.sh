@@ -17,6 +17,7 @@ do_export() {
   echo "📤 Exporting from $url..."
   docker run --rm \
     -v "$(pwd)/$EXPORT_DIR":/exports \
+    --network host \
     postgres:17 \
     pg_dump "$url" -F p -v -f "/exports/$(basename "$EXPORT_FILE")"
 
@@ -35,6 +36,7 @@ do_import() {
   echo "📥 Importing into $url..."
   docker run --rm \
     -v "$(realpath "$file")":/import.sql \
+    --network host \
     postgres:17 \
     psql "$url" -f /import.sql
 
