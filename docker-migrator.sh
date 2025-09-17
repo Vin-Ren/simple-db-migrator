@@ -4,6 +4,7 @@ set -euo pipefail
 ACTION="${1:-}"
 SOURCE_DB_URL="${2:-}"
 DEST_DB_URL="${3:-}"
+NETWORK="${4:-host}"
 
 EXPORT_DIR="./db_exports"
 TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
@@ -13,11 +14,12 @@ mkdir -p "$EXPORT_DIR"
 
 do_export() {
   local url="$1"
+  local network="$2"
 
-  echo "📤 Exporting from $url..."
+  echo "📤 Exporting from $url using network: $network..."
   docker run --rm \
     -v "$(pwd)/$EXPORT_DIR":/exports \
-    --network host \
+    --network "$network" \
     postgres:17 \
     pg_dump "$url" -F p -v -f "/exports/$(basename "$EXPORT_FILE")"
 
@@ -32,11 +34,12 @@ do_export() {
 do_import() {
   local url="$1"
   local file="$2"
+  local network="$3"
 
-  echo "📥 Importing into $url..."
+  echo "📥 Importing into $url using network: $network..."
   docker run --rm \
     -v "$(realpath "$file")":/import.sql \
-    --network host \
+    --network "$network" \
     postgres:17 \
     psql "$url" -f /import.sql
 
@@ -45,35 +48,40 @@ do_import() {
 
 # --- DISPATCH ---
 if [ -z "$ACTION" ]; then
-  echo "Usage: $0 {export <source_db_url>|import <dump_file.sql> <dest_db_url>|migrate <source_db_url> <dest_db_url>}"
+  echo "Usage: $0 {export <source_db_url> [network]|import <dump_file.sql> <dest_db_url> [network]|migrate <source_db_url> <dest_db_url> [network]}"
+  echo "Default network: host"
   exit 1
 fi
 
 case "$ACTION" in
   export)
     if [ -z "$SOURCE_DB_URL" ]; then
-      echo "Usage: $0 export <source_db_url>"
+      echo "Usage: $0 export <source_db_url> [network]"
+      echo "Default network: host"
       exit 1
     fi
-    do_export "$SOURCE_DB_URL"
+    do_export "$SOURCE_DB_URL" "$NETWORK"
     ;;
   import)
     if [ -z "$DEST_DB_URL" ] || [ ! -f "$SOURCE_DB_URL" ]; then
-      echo "Usage: $0 import <dump_file.sql> <destination_db_url>"
+      echo "Usage: $0 import <dump_file.sql> <destination_db_url> [network]"
+      echo "Default network: host"
       exit 1
     fi
-    do_import "$DEST_DB_URL" "$SOURCE_DB_URL"
+    do_import "$DEST_DB_URL" "$SOURCE_DB_URL" "$NETWORK"
     ;;
   migrate)
     if [ -z "$SOURCE_DB_URL" ] || [ -z "$DEST_DB_URL" ]; then
-      echo "Usage: $0 migrate <source_db_url> <destination_db_url>"
+      echo "Usage: $0 migrate <source_db_url> <destination_db_url> [network]"
+      echo "Default network: host"
       exit 1
     fi
-    do_export "$SOURCE_DB_URL"
-    do_import "$DEST_DB_URL" "$EXPORT_FILE"
+    do_export "$SOURCE_DB_URL" "$NETWORK"
+    do_import "$DEST_DB_URL" "$EXPORT_FILE" "$NETWORK"
     ;;
   *)
-    echo "Usage: $0 {export <source_db_url>|import <dump_file.sql> <dest_db_url>|migrate <source_db_url> <dest_db_url>}"
+    echo "Usage: $0 {export <source_db_url> [network]|import <dump_file.sql> <dest_db_url> [network]|migrate <source_db_url> <dest_db_url> [network]}"
+    echo "Default network: host"
     exit 1
     ;;
 esac
